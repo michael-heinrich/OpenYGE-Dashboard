@@ -34,13 +34,24 @@ python -m pip install -r requirements.txt
 
 ### Building/flashing the Teensy collector
 
-To build (and optionally upload) the collector firmware on Windows run:
+There are dedicated top-level helper scripts for Windows (run from the repository root):
+
+- `build_teensy.bat` — build the `collector` firmware (PlatformIO) without uploading
+- `build_flash_teensy.bat` — build and upload (flash) the firmware to a connected Teensy (interactive confirmation)
+
+Run the build only:
 
 ```bat
-collector\\build_windows.bat
+build_teensy.bat
 ```
 
-This script uses the PlatformIO CLI (`pio`) or `python -m platformio` to build the `teensy40` environment. If you prefer a GUI, open the `collector` folder in VS Code and use the PlatformIO extension to build/upload.
+Run build-and-flash:
+
+```bat
+build_flash_teensy.bat
+```
+
+Both scripts invoke PlatformIO for the `teensy40` environment and operate on the `collector` project directory. The script `collector\\build_windows.bat` also exists and can be used directly from the `collector` folder, but the top-level scripts are provided as the one-click helpers.
 
 ## Hardware wiring and behavior
 
