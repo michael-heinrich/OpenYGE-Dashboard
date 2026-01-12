@@ -58,6 +58,7 @@ Both scripts invoke PlatformIO for the `teensy40` environment and operate on the
 - Connect ESC telemetry TX lines to the Teensy RX pins for the two serial channels.
   - ESC #1 TX -> Teensy RX1 (Serial1)
   - ESC #2 TX -> Teensy RX2 (Serial2)
+  - Connect ESC ground(s) to Teensy GND so telemetry signals share a common reference.
 - The collector firmware reads both UARTs, formats CSV lines and prints them over the Teensy's USB serial connection. The backend reads that USB serial, records sessions to `sessions/` and serves the dashboard.
 - Ensure common ground between ESCs and the Teensy. Power ESCs/vehicle appropriately.
 
