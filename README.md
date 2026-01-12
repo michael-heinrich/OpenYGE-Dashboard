@@ -80,6 +80,12 @@ Open a browser to the addresses printed by the server (typically http://localhos
 
 Telemetry sessions are saved as CSV files in the `sessions/` directory.
 
+## Screenshot
+
+Below is a screenshot of the dashboard UI (stored at `backend/static/dashboard.png`):
+
+![Dashboard screenshot](backend/static/dashboard.png)
+
 ## Troubleshooting
 
 - No telemetry: verify ESCs are configured to output OpenYGE telemetry and TX lines are connected to the Teensy's RX pins.
