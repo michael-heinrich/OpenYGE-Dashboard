@@ -1,6 +1,6 @@
-# ESC_webapp
+# OpenYGE-Dashboard
 
-ESC_webapp reads, stores and visualizes OpenYGE telemetry from YGE ESCs using a Teensy 4.0.
+OpenYGE-Dashboard reads, stores and visualizes OpenYGE telemetry from YGE ESCs using a Teensy 4.0.
 
 - Telemetry format: OpenYGE CSV-style output
 - Hardware: Teensy 4.0 capturing up to two ESC telemetry channels
