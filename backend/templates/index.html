@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESC Telemetry Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="dashboard">
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">
+                    <span class="icon">⚡</span>
+                    ESC Telemetry Dashboard
+                    <span class="icon">⚡</span>
+                </h1>
+                <div class="connection-status">
+                    <span class="status-indicator" id="connection-status"></span>
+                    <span id="connection-text">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="device-selector">ESC Device:</label>
+                <select id="device-selector" class="device-selector">
+                    <option value="all">All Devices</option>
+                </select>
+            </div>
+            <button id="pause-btn" class="btn btn-primary">Pause</button>
+            <button id="clear-btn" class="btn btn-secondary">Clear Charts</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">🔄</div>
+                <div class="stat-content">
+                    <h3 class="stat-label">RPM</h3>
+                    <div class="stat-value" id="rpm-value">0</div>
+                    <div class="stat-unit">revolutions/min</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">⚡</div>
+                <div class="stat-content">
+                    <h3 class="stat-label">Voltage</h3>
+                    <div class="stat-value" id="voltage-value">0.00</div>
+                    <div class="stat-unit">volts</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">🔋</div>
+                <div class="stat-content">
+                    <h3 class="stat-label">Current</h3>
+                    <div class="stat-value" id="current-value">0.00</div>
+                    <div class="stat-unit">amps</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">🔥</div>
+                <div class="stat-content">
+                    <h3 class="stat-label">Temperature</h3>
+                    <div class="stat-value" id="temp-value">0.0</div>
+                    <div class="stat-unit">°C</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">⚙️</div>
+                <div class="stat-content">
+                    <h3 class="stat-label">Throttle</h3>
+                    <div class="stat-value" id="throttle-value">0.0</div>
+                    <div class="stat-unit">%</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">📊</div>
+                <div class="stat-content">
+                    <h3 class="stat-label">Consumption</h3>
+                    <div class="stat-value" id="consumption-value">0</div>
+                    <div class="stat-unit">mAh</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">🔌</div>
+                <div class="stat-content">
+                    <h3 class="stat-label">BEC Voltage</h3>
+                    <div class="stat-value" id="bec-voltage-value">0.00</div>
+                    <div class="stat-unit">volts</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">🌡️</div>
+                <div class="stat-content">
+                    <h3 class="stat-label">BEC Temp</h3>
+                    <div class="stat-value" id="bec-temp-value">0.0</div>
+                    <div class="stat-unit">°C</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3 class="chart-title">RPM Over Time</h3>
+                <canvas id="rpm-chart"></canvas>
+            </div>
+
+            <div class="chart-card">
+                <h3 class="chart-title">Voltage & Current</h3>
+                <canvas id="power-chart"></canvas>
+            </div>
+
+            <div class="chart-card">
+                <h3 class="chart-title">Temperature</h3>
+                <canvas id="temp-chart"></canvas>
+            </div>
+
+            <div class="chart-card">
+                <h3 class="chart-title">Throttle & PWM</h3>
+                <canvas id="throttle-chart"></canvas>
+            </div>
+        </div>
+
+        <div class="data-table-container">
+            <h3 class="section-title">Live Data Stream</h3>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Device</th>
+                            <th>RPM</th>
+                            <th>Voltage</th>
+                            <th>Current</th>
+                            <th>Throttle</th>
+                            <th>Temp</th>
+                            <th>RX Frames</th>
+                            <th>Dropped</th>
+                        </tr>
+                    </thead>
+                    <tbody id="data-table-body">
+                        <tr class="no-data">
+                            <td colspan="9">Waiting for telemetry data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
