@@ -5,16 +5,28 @@ let selectedDevice = 'all';
 let deviceSet = new Set();
 
 // Chart configuration
-const maxDataPoints = 50;
+const maxDataPoints = 1200; // 2 minutes @ 10Hz, 1 minute @ 20Hz
+const deviceColors = [
+    '#00d4ff', '#00ff88', '#ff3366', '#7b2ff7', 
+    '#ffa500', '#2ecc71', '#e74c3c', '#3498db'
+];
+
+function getDeviceColor(deviceId, alpha = 1, isSecondary = false) {
+    const baseColor = deviceColors[deviceId % deviceColors.length];
+    if (!isSecondary) return baseColor;
+    
+    // For secondary metrics like Current or PWM, maybe shift the color slightly
+    // or return a predefined secondary color. For now, let's just use the same
+    // but we could use a different palette.
+    return baseColor;
+}
+
 const chartData = {
-    rpm: { labels: [], data: [] },
-    voltage: { labels: [], data: [] },
-    current: { labels: [], data: [] },
-    temp: { labels: [], data: [] },
-    becTemp: { labels: [], data: [] },
-    throttle: { labels: [], data: [] },
-    pwm: { labels: [], data: [] }
+    labels: [],
+    devices: {} // deviceId -> { rpm: [], voltage: [], current: [], temp: [], becTemp: [], throttle: [], pwm: [] }
 };
+
+const lastValues = {}; // deviceId -> latest data packet
 
 // Chart.js default configuration
 Chart.defaults.color = '#8b92b2';
@@ -26,16 +38,7 @@ const rpmChart = new Chart(document.getElementById('rpm-chart'), {
     type: 'line',
     data: {
         labels: [],
-        datasets: [{
-            label: 'RPM',
-            data: [],
-            borderColor: '#00d4ff',
-            backgroundColor: 'rgba(0, 212, 255, 0.1)',
-            borderWidth: 2,
-            tension: 0.4,
-            fill: true,
-            pointRadius: 0
-        }]
+        datasets: []
     },
     options: getChartOptions('RPM')
 });
@@ -44,28 +47,7 @@ const powerChart = new Chart(document.getElementById('power-chart'), {
     type: 'line',
     data: {
         labels: [],
-        datasets: [
-            {
-                label: 'Voltage (V)',
-                data: [],
-                borderColor: '#00ff88',
-                backgroundColor: 'rgba(0, 255, 136, 0.1)',
-                borderWidth: 2,
-                tension: 0.4,
-                yAxisID: 'y',
-                pointRadius: 0
-            },
-            {
-                label: 'Current (A)',
-                data: [],
-                borderColor: '#ffa500',
-                backgroundColor: 'rgba(255, 165, 0, 0.1)',
-                borderWidth: 2,
-                tension: 0.4,
-                yAxisID: 'y1',
-                pointRadius: 0
-            }
-        ]
+        datasets: []
     },
     options: getDualAxisChartOptions('Voltage (V)', 'Current (A)')
 });
@@ -74,26 +56,7 @@ const tempChart = new Chart(document.getElementById('temp-chart'), {
     type: 'line',
     data: {
         labels: [],
-        datasets: [
-            {
-                label: 'ESC Temp (°C)',
-                data: [],
-                borderColor: '#ff3366',
-                backgroundColor: 'rgba(255, 51, 102, 0.1)',
-                borderWidth: 2,
-                tension: 0.4,
-                pointRadius: 0
-            },
-            {
-                label: 'BEC Temp (°C)',
-                data: [],
-                borderColor: '#7b2ff7',
-                backgroundColor: 'rgba(123, 47, 247, 0.1)',
-                borderWidth: 2,
-                tension: 0.4,
-                pointRadius: 0
-            }
-        ]
+        datasets: []
     },
     options: getChartOptions('Temperature (°C)')
 });
@@ -102,28 +65,7 @@ const throttleChart = new Chart(document.getElementById('throttle-chart'), {
     type: 'line',
     data: {
         labels: [],
-        datasets: [
-            {
-                label: 'Throttle (%)',
-                data: [],
-                borderColor: '#00d4ff',
-                backgroundColor: 'rgba(0, 212, 255, 0.1)',
-                borderWidth: 2,
-                tension: 0.4,
-                yAxisID: 'y',
-                pointRadius: 0
-            },
-            {
-                label: 'PWM',
-                data: [],
-                borderColor: '#7b2ff7',
-                backgroundColor: 'rgba(123, 47, 247, 0.1)',
-                borderWidth: 2,
-                tension: 0.4,
-                yAxisID: 'y1',
-                pointRadius: 0
-            }
-        ]
+        datasets: []
     },
     options: getDualAxisChartOptions('Throttle (%)', 'PWM')
 });
@@ -225,26 +167,139 @@ socket.on('disconnect', () => {
 socket.on('telemetry', (data) => {
     if (isPaused) return;
     
+    const deviceId = data.device;
+    lastValues[deviceId] = data;
+
     // Add device to set and update selector
-    if (!deviceSet.has(data.device)) {
-        deviceSet.add(data.device);
+    if (!deviceSet.has(deviceId)) {
+        deviceSet.add(deviceId);
+        initDeviceData(deviceId);
         updateDeviceSelector();
     }
     
-    // Filter by selected device
-    if (selectedDevice !== 'all' && data.device !== parseInt(selectedDevice)) {
-        return;
-    }
-    
-    // Update stats cards
+    // Update stats cards (always update for the device that just sent data)
     updateStats(data);
-    
-    // Update charts
-    updateCharts(data);
     
     // Update data table
     updateTable(data);
+
+    // Update charts (handle filtering and multi-line)
+    updateCharts(data);
 });
+
+function initDeviceData(deviceId) {
+    if (!chartData.devices[deviceId]) {
+        chartData.devices[deviceId] = {
+            rpm: [], voltage: [], current: [], temp: [],
+            becTemp: [], throttle: [], pwm: []
+        };
+        
+        // Fill with nulls to match current labels length
+        const currentLen = chartData.labels.length;
+        for (let i = 0; i < currentLen; i++) {
+            chartData.devices[deviceId].rpm.push(null);
+            chartData.devices[deviceId].voltage.push(null);
+            chartData.devices[deviceId].current.push(null);
+            chartData.devices[deviceId].temp.push(null);
+            chartData.devices[deviceId].becTemp.push(null);
+            chartData.devices[deviceId].throttle.push(null);
+            chartData.devices[deviceId].pwm.push(null);
+        }
+        
+        // Add datasets to charts
+        addDeviceDatasetsToCharts(deviceId);
+    }
+}
+
+function addDeviceDatasetsToCharts(deviceId) {
+    const color = getDeviceColor(deviceId);
+    
+    // RPM Chart
+    rpmChart.data.datasets.push({
+        label: `ESC ${deviceId} RPM`,
+        data: chartData.devices[deviceId].rpm,
+        borderColor: color,
+        backgroundColor: `${color}1A`, // 10% opacity
+        borderWidth: 2,
+        tension: 0.4,
+        fill: true,
+        pointRadius: 0,
+        deviceId: deviceId
+    });
+
+    // Power Chart
+    powerChart.data.datasets.push({
+        label: `ESC ${deviceId} Voltage (V)`,
+        data: chartData.devices[deviceId].voltage,
+        borderColor: color,
+        borderWidth: 2,
+        tension: 0.4,
+        yAxisID: 'y',
+        pointRadius: 0,
+        deviceId: deviceId,
+        borderDash: []
+    });
+    powerChart.data.datasets.push({
+        label: `ESC ${deviceId} Current (A)`,
+        data: chartData.devices[deviceId].current,
+        borderColor: color,
+        borderWidth: 2,
+        tension: 0.4,
+        yAxisID: 'y1',
+        pointRadius: 0,
+        deviceId: deviceId,
+        borderDash: [5, 5] // Dashed for current to distinguish
+    });
+
+    // Temp Chart
+    tempChart.data.datasets.push({
+        label: `ESC ${deviceId} Temp (°C)`,
+        data: chartData.devices[deviceId].temp,
+        borderColor: color,
+        borderWidth: 2,
+        tension: 0.4,
+        pointRadius: 0,
+        deviceId: deviceId
+    });
+    tempChart.data.datasets.push({
+        label: `ESC ${deviceId} BEC Temp (°C)`,
+        data: chartData.devices[deviceId].becTemp,
+        borderColor: color,
+        borderWidth: 1,
+        borderDash: [2, 2],
+        tension: 0.4,
+        pointRadius: 0,
+        deviceId: deviceId
+    });
+
+    // Throttle Chart
+    throttleChart.data.datasets.push({
+        label: `ESC ${deviceId} Throttle (%)`,
+        data: chartData.devices[deviceId].throttle,
+        borderColor: color,
+        borderWidth: 2,
+        tension: 0.4,
+        yAxisID: 'y',
+        pointRadius: 0,
+        deviceId: deviceId
+    });
+    throttleChart.data.datasets.push({
+        label: `ESC ${deviceId} PWM`,
+        data: chartData.devices[deviceId].pwm,
+        borderColor: color,
+        borderWidth: 1,
+        borderDash: [3, 3],
+        tension: 0.4,
+        yAxisID: 'y1',
+        pointRadius: 0,
+        deviceId: deviceId
+    });
+
+    rpmChart.update();
+    powerChart.update();
+    tempChart.update();
+    throttleChart.update();
+}
 
 function updateConnectionStatus(connected) {
     const indicator = document.getElementById('connection-status');
@@ -260,94 +315,113 @@ function updateConnectionStatus(connected) {
 }
 
 function updateStats(data) {
-    // RPM
-    document.getElementById('rpm-value').textContent = data.rpm || 0;
+    const deviceId = data.device;
     
-    // Voltage (convert from mV to V)
-    const voltage = (data.voltage_mV / 1000).toFixed(2);
-    document.getElementById('voltage-value').textContent = voltage;
+    updateStatValue('rpm', deviceId, data.rpm || 0);
+    updateStatValue('voltage', deviceId, (data.voltage_mV / 1000).toFixed(2));
+    updateStatValue('current', deviceId, (data.current_mA / 1000).toFixed(2));
+    updateStatValue('temp', deviceId, (data.tempC_x10 / 10).toFixed(1));
+    updateStatValue('throttle', deviceId, (data.throttle_x10 / 10).toFixed(1));
+    updateStatValue('consumption', deviceId, data.consumption_mAh || 0);
+    updateStatValue('bec-voltage', deviceId, (data.bec_voltage_mV / 1000).toFixed(2));
+    updateStatValue('bec-temp', deviceId, (data.bec_tempC_x10 / 10).toFixed(1));
+}
+
+function updateStatValue(metric, deviceId, value) {
+    const container = document.getElementById(`${metric}-container`);
+    if (!container) return;
     
-    // Current (convert from mA to A)
-    const current = (data.current_mA / 1000).toFixed(2);
-    document.getElementById('current-value').textContent = current;
-    
-    // Temperature (convert from tenths to degrees)
-    const temp = (data.tempC_x10 / 10).toFixed(1);
-    document.getElementById('temp-value').textContent = temp;
-    
-    // Throttle (convert from tenths to percent)
-    const throttle = (data.throttle_x10 / 10).toFixed(1);
-    document.getElementById('throttle-value').textContent = throttle;
-    
-    // Consumption
-    document.getElementById('consumption-value').textContent = data.consumption_mAh || 0;
-    
-    // BEC Voltage (convert from mV to V)
-    const becVoltage = (data.bec_voltage_mV / 1000).toFixed(2);
-    document.getElementById('bec-voltage-value').textContent = becVoltage;
-    
-    // BEC Temperature (convert from tenths to degrees)
-    const becTemp = (data.bec_tempC_x10 / 10).toFixed(1);
-    document.getElementById('bec-temp-value').textContent = becTemp;
+    let element = document.getElementById(`${metric}-value-${deviceId}`);
+    if (!element) {
+        // Remove placeholder if it exists
+        const placeholder = document.getElementById(`${metric}-value`);
+        if (placeholder) {
+            placeholder.remove();
+        }
+
+        element = document.createElement('div');
+        element.id = `${metric}-value-${deviceId}`;
+        element.className = 'device-stat-row';
+        element.style.borderColor = getDeviceColor(deviceId);
+        element.innerHTML = `
+            <span class="device-label">#${deviceId}</span>
+            <span class="stat-value">${value}</span>
+        `;
+        container.appendChild(element);
+    } else {
+        element.querySelector('.stat-value').textContent = value;
+    }
 }
 
 function updateCharts(data) {
     const timestamp = formatTime(data.ts_ms);
+    const deviceId = String(data.device);
     
-    // Add data point
-    addChartData(timestamp, {
-        rpm: data.rpm || 0,
-        voltage: data.voltage_mV / 1000,
-        current: data.current_mA / 1000,
-        temp: data.tempC_x10 / 10,
-        becTemp: data.bec_tempC_x10 / 10,
-        throttle: data.throttle_x10 / 10,
-        pwm: data.pwm_x10 / 10
-    });
+    // Add data point to all datasets
+    addChartData(timestamp, deviceId, data);
     
+    // Update chart visibility based on selection
+    const filter = (ds) => {
+        if (selectedDevice === 'all') return true;
+        return String(ds.deviceId) === selectedDevice;
+    };
+
     // Update all charts
-    updateChart(rpmChart, timestamp, chartData.rpm.data);
-    updateDualChart(powerChart, timestamp, chartData.voltage.data, chartData.current.data);
-    updateDualChart(tempChart, timestamp, chartData.temp.data, chartData.becTemp.data);
-    updateDualChart(throttleChart, timestamp, chartData.throttle.data, chartData.pwm.data);
+    [rpmChart, powerChart, tempChart, throttleChart].forEach(chart => {
+        chart.data.labels = chartData.labels;
+        chart.data.datasets.forEach(ds => {
+            ds.hidden = !filter(ds);
+        });
+        chart.update('none');
+    });
 }
 
-function addChartData(label, values) {
-    // Add new data
-    chartData.rpm.labels.push(label);
-    chartData.rpm.data.push(values.rpm);
-    chartData.voltage.data.push(values.voltage);
-    chartData.current.data.push(values.current);
-    chartData.temp.data.push(values.temp);
-    chartData.becTemp.data.push(values.becTemp);
-    chartData.throttle.data.push(values.throttle);
-    chartData.pwm.data.push(values.pwm);
+function addChartData(label, deviceId, data) {
+    chartData.labels.push(label);
     
-    // Remove old data if exceeding max points
-    if (chartData.rpm.labels.length > maxDataPoints) {
-        chartData.rpm.labels.shift();
-        chartData.rpm.data.shift();
-        chartData.voltage.data.shift();
-        chartData.current.data.shift();
-        chartData.temp.data.shift();
-        chartData.becTemp.data.shift();
-        chartData.throttle.data.shift();
-        chartData.pwm.data.shift();
+    // For each device, push either its new data or its last known data
+    Object.keys(chartData.devices).forEach(id => {
+        const deviceStore = chartData.devices[id];
+        
+        if (id === deviceId) {
+            deviceStore.rpm.push(Number(data.rpm) || 0);
+            deviceStore.voltage.push(Number(data.voltage_mV) / 1000);
+            deviceStore.current.push(Number(data.current_mA) / 1000);
+            deviceStore.temp.push(Number(data.tempC_x10) / 10);
+            deviceStore.becTemp.push(Number(data.bec_tempC_x10) / 10);
+            deviceStore.throttle.push(Number(data.throttle_x10) / 10);
+            deviceStore.pwm.push(Number(data.pwm_x10) / 10);
+        } else {
+            const last = lastValues[id];
+            deviceStore.rpm.push(last ? Number(last.rpm) : null);
+            deviceStore.voltage.push(last ? Number(last.voltage_mV) / 1000 : null);
+            deviceStore.current.push(last ? Number(last.current_mA) / 1000 : null);
+            deviceStore.temp.push(last ? Number(last.tempC_x10) / 10 : null);
+            deviceStore.becTemp.push(last ? Number(last.bec_tempC_x10) / 10 : null);
+            deviceStore.throttle.push(last ? Number(last.throttle_x10) / 10 : null);
+            deviceStore.pwm.push(last ? Number(last.pwm_x10) / 10 : null);
+        }
+        
+        // Trim
+        if (deviceStore.rpm.length > maxDataPoints) {
+            deviceStore.rpm.shift();
+            deviceStore.voltage.shift();
+            deviceStore.current.shift();
+            deviceStore.temp.shift();
+            deviceStore.becTemp.shift();
+            deviceStore.throttle.shift();
+            deviceStore.pwm.shift();
+        }
+    });
+
+    if (chartData.labels.length > maxDataPoints) {
+        chartData.labels.shift();
     }
 }
 
-function updateChart(chart, label, data) {
-    chart.data.labels = chartData.rpm.labels;
-    chart.data.datasets[0].data = data;
-    chart.update('none');
-}
-
-function updateDualChart(chart, label, data1, data2) {
-    chart.data.labels = chartData.rpm.labels;
-    chart.data.datasets[0].data = data1;
-    chart.data.datasets[1].data = data2;
-    chart.update('none');
-}
+// These are now handled within updateCharts and addChartData
+function updateChart(chart, label, data) { }
+function updateDualChart(chart, label, data1, data2) { }
 
 function updateTable(data) {
     const tbody = document.getElementById('data-table-body');
@@ -410,32 +484,26 @@ function formatTime(milliseconds) {
 }
 
 function clearCharts() {
-    // Clear data arrays
-    chartData.rpm.labels = [];
-    chartData.rpm.data = [];
-    chartData.voltage.data = [];
-    chartData.current.data = [];
-    chartData.temp.data = [];
-    chartData.becTemp.data = [];
-    chartData.throttle.data = [];
-    chartData.pwm.data = [];
+    // Clear labels
+    chartData.labels = [];
+    
+    // Clear data arrays for all devices
+    Object.keys(chartData.devices).forEach(deviceId => {
+        const deviceStore = chartData.devices[deviceId];
+        deviceStore.rpm = [];
+        deviceStore.voltage = [];
+        deviceStore.current = [];
+        deviceStore.temp = [];
+        deviceStore.becTemp = [];
+        deviceStore.throttle = [];
+        deviceStore.pwm = [];
+    });
     
     // Update all charts
-    rpmChart.data.labels = [];
-    rpmChart.data.datasets[0].data = [];
-    rpmChart.update();
-    
-    powerChart.data.labels = [];
-    powerChart.data.datasets.forEach(ds => ds.data = []);
-    powerChart.update();
-    
-    tempChart.data.labels = [];
-    tempChart.data.datasets.forEach(ds => ds.data = []);
-    tempChart.update();
-    
-    throttleChart.data.labels = [];
-    throttleChart.data.datasets.forEach(ds => ds.data = []);
-    throttleChart.update();
+    [rpmChart, powerChart, tempChart, throttleChart].forEach(chart => {
+        chart.data.labels = [];
+        chart.update();
+    });
 }
 
 // Event listeners

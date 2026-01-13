@@ -248,13 +248,41 @@ body {
     margin-bottom: 5px;
 }
 
+.stats-container {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 5px;
+    width: 100%;
+}
+
+.device-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.device-stat-row:last-child {
+    border-bottom: none;
+}
+
+.device-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: bold;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1px 4px;
+    border-radius: 4px;
+}
+
 .stat-value {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: var(--accent-primary);
     line-height: 1;
-    margin-bottom: 5px;
-    text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+    text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
 }
 
 .stat-unit {
